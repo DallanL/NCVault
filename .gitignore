@@ -174,4 +174,7 @@ cython_debug/
 .pypirc
 
 #key files
-.key
+*.key
+
+#application config file
+ncvault_config.json
