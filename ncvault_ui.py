@@ -5,11 +5,15 @@ import os
 import logging
 from app.helpers import validate_and_normalize_domain
 from app.config import Config
+from pathlib import Path
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 log = logging.getLogger(__name__)
+
+APP_ROOT = Path(__file__).resolve().parent
+CONFIG_PATH = APP_ROOT / Config.CONFIG_FILENAME
 
 
 class PlaceholderEntry(tk.Entry):
@@ -48,12 +52,14 @@ class PlaceholderEntry(tk.Entry):
 
     def _on_focus_in(self, event) -> None:
         """Removes placeholder text on focus."""
+        _ = event
         if self.winfo_exists() and super().get() == self.placeholder:
             self.delete(0, tk.END)
             self.config(fg=self.default_fg_color)
 
     def _on_focus_out(self, event) -> None:
         """Adds placeholder if the entry is empty."""
+        _ = event
         # Check value after stripping whitespace
         if self.winfo_exists() and not super().get().strip():
             self._put_placeholder()
@@ -86,7 +92,11 @@ class ConfigUI:
         master.title("VoIP Service Configuration")
         master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-        self.config_data = {}
+        # load existing JSON (or empty dict)
+        try:
+            self.config_data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            self.config_data = {}
 
         # --- UI Elements ---
         tk.Label(master, text="Server URL:").grid(
@@ -96,6 +106,8 @@ class ConfigUI:
             master, placeholder="voip.example.com", width=75
         )
         self.entry_url.grid(row=0, column=1, padx=5, pady=5)
+        if url := self.config_data.get("server_url"):
+            self.entry_url.set_value(url)
 
         tk.Label(master, text="API Key:").grid(
             row=1, column=0, sticky=tk.W, padx=5, pady=5
@@ -104,6 +116,8 @@ class ConfigUI:
             master, placeholder="nsd-erfwu4432hjkl......", width=75
         )
         self.entry_apikey.grid(row=1, column=1, padx=5, pady=5)
+        if apikey := self.config_data.get("apikey"):
+            self.entry_apikey.set_value(apikey)
 
         tk.Label(master, text="Data Directory:").grid(
             row=2, column=0, sticky=tk.W, padx=5, pady=5
@@ -112,6 +126,9 @@ class ConfigUI:
             master, placeholder="Select directory for storing data", width=65
         )
         self.entry_directory.grid(row=2, column=1, padx=5, pady=5, sticky=tk.W + tk.E)
+        if dd := self.config_data.get("data_directory"):
+            self.entry_directory.set_value(dd)
+
         self.browse_button = tk.Button(
             master, text="Browse...", command=self.browse_directory
         )
@@ -185,19 +202,18 @@ class ConfigUI:
         return True, config
 
     def save_configuration(self) -> None:
-        """Validates inputs and saves them to a JSON file in the data directory."""
+        """Validates inputs and saves them to ncvault_config.json at APP_ROOT."""
         self.update_status("", "black")
         isValid, config = self.validate_data()
 
         if not isValid or config is None:
             return
 
-        data_dir = config["data_directory"]
-        config_filepath = os.path.join(data_dir, Config.CONFIG_FILENAME)
+        config_filepath = CONFIG_PATH
 
         try:
-            os.makedirs(data_dir, exist_ok=True)
-            logging.info(f"Ensured data directory exists: {data_dir}")
+            CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            logging.info(f"Ensured app root exists: {CONFIG_PATH.parent}")
 
             with open(config_filepath, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=4)
@@ -213,7 +229,7 @@ class ConfigUI:
             )
             messagebox.showerror(
                 "File Error",
-                f"Failed to save configuration file:\n{e}\n\nPlease check permissions for directory:\n{data_dir}",
+                f"Failed to save configuration file:\n{e}\n\nPlease check permissions for directory:\n{config_filepath}",
                 parent=self.master,
             )
             self.update_status(f"Error saving configuration.", "red")
