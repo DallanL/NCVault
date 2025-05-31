@@ -1,94 +1,52 @@
-import json
 import requests
 from pathlib import Path
-from datetime import datetime
-from typing import List, Dict, Any, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List
+import urllib.parse
 
 
 class VoIPService:
     def __init__(self, config: Dict[str, Any]) -> None:
         self.config = config
-        self.token: Optional[str] = None
+        # e.g. "voip.example.com"
+        self.server = self.config.get("server_url", "").lstrip("https://")
+        self.apikey = self.config.get("apikey", "")
+        self.base_url = f"https://{self.server}/ns-api/v2"
+        self.key_info: Dict[str, Any] = {}
 
-    def authenticate(self) -> None:
-        # TODO: Replace with real OAuth2 flow
-        self.token = "my_oauth_token"
-        print("Authenticated with token:", self.token)
+    def validate_key(self) -> None:
+        """Checks the key info endpoint and scope."""
+        url = f"{self.base_url}/apikeys/~"
+        headers = {"Authorization": f"Bearer {self.apikey}"}
+        resp = requests.get(url, headers=headers)
+        if resp.status_code != 200:
+            raise ValueError("Invalid API key")
+        info = resp.json()
+        if info.get("scope") != "Office Manager":
+            raise PermissionError("Key must have Office Manager scope")
+        self.key_info = info
 
-    def fetch_call_history(self) -> List[Dict[str, Any]]:
-        """
-        Stub: Replace with an API call that returns a list of call records,
-        each including at least:
-          - an 'id' field (string)
-          - a 'timestamp' field (ISO8601 string)
-          - optionally 'recording_url' and 'transcription' fields
-        """
-        # Example response:
-        return [
-            {
-                "id": "call123",
-                "timestamp": "2025-05-30T14:23:05Z",
-                "recording_url": "https://api.voip.com/recordings/call123.wav",
-                "transcription": "Hello, world!",
-            },
-            # … more records …
-        ]
+    def fetch_calls(self) -> List[Dict[str, Any]]:
+        """Fetches all calls from (now-3mo) to (now-8h) with pagination."""
+        now = datetime.now(timezone.utc)
+        datetimestart = urllib.parse.quote((now - timedelta(days=90)).isoformat())
+        datetimeend = urllib.parse.quote((now - timedelta(hours=8)).isoformat())
 
-    def _get_date_path(self, timestamp: str) -> Path:
-        """
-        Given an ISO8601 timestamp, return a path like:
-            {data_dir}/YYYY/MM/DD
-        """
-        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-        base = Path(self.config["data_directory"])
-        # e.g. /path/to/data/2025/05/30
-        return base / f"{dt.year:04d}" / f"{dt.month:02d}" / f"{dt.day:02d}"
+        url = f"{self.base_url}/cdrs?datetime-start={datetimestart}&datetime-end={datetimeend}"
+        headers = {"Authorization": f"Bearer {self.apikey}"}
+        params = {
+            "start": 0,
+            "limit": 1000,
+        }
 
-    def _save_metadata(self, record: Dict[str, Any], dest: Path) -> None:
-        """
-        Write out metadata for a single call as JSON.
-        """
-        meta_file = dest / f"{record['id']}_meta.json"
-        with open(meta_file, "w", encoding="utf-8") as f:
-            json.dump(record, f, indent=2)
-        print(f"→ Saved metadata: {meta_file}")
-
-    def _download_recording(self, url: str, dest: Path) -> None:
-        """
-        Download a .wav file and save it to dest.
-        """
-        r = requests.get(url, stream=True)
-        r.raise_for_status()
-        wav_path = dest / Path(url).name
-        with open(wav_path, "wb") as f:
-            for chunk in r.iter_content(8192):
-                f.write(chunk)
-        print(f"→ Downloaded recording: {wav_path}")
-
-    def process_history(self) -> None:
-        """
-        Fetches all call records and saves them into a date-based folder
-        with metadata and recordings.
-        """
-        if not self.token:
-            raise RuntimeError("Not authenticated")
-
-        calls = self.fetch_call_history()
-        for rec in calls:
-            date_folder = self._get_date_path(rec["timestamp"])
-            # Create directories if they don't exist
-            date_folder.mkdir(parents=True, exist_ok=True)  #
-
-            # Save metadata
-            self._save_metadata(rec, date_folder)
-
-            # Download recording if present
-            if rec.get("recording_url"):
-                try:
-                    self._download_recording(rec["recording_url"], date_folder)
-                except Exception as e:
-                    print(f"⚠️ Failed to download {rec['recording_url']}: {e}")
-
-    def run(self) -> None:
-        self.authenticate()
-        self.process_history()
+        all_calls: List[Dict[str, Any]] = []
+        while True:
+            # concactonate the start and limit onto the URL
+            r = requests.get(url, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+            all_calls.extend(data["items"])
+            if not data:
+                break
+            params["start"] += params["limit"]
+        return all_calls
