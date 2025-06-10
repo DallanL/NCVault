@@ -1,8 +1,8 @@
 import requests
+import json
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
-import urllib.parse
 
 
 class VoIPService:
@@ -13,40 +13,103 @@ class VoIPService:
         self.apikey = self.config.get("apikey", "")
         self.base_url = f"https://{self.server}/ns-api/v2"
         self.key_info: Dict[str, Any] = {}
+        self.base_data_dir = Path(self.config.get("data_directory", ""))
+
+    def _get_date_path(self, iso_timestamp: str) -> Path:
+        """
+        Given an ISO8601 timestamp (e.g. "2025-05-30T21:19:16+00:00"),
+        create/return a Path like base_data_dir/YYYY/MM/DD.
+        """
+        dt = datetime.fromisoformat(iso_timestamp)
+        folder = (
+            self.base_data_dir / f"{dt.year:04d}" / f"{dt.month:02d}" / f"{dt.day:02d}"
+        )
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder
 
     def validate_key(self) -> None:
-        """Checks the key info endpoint and scope."""
         url = f"{self.base_url}/apikeys/~"
         headers = {"Authorization": f"Bearer {self.apikey}"}
-        resp = requests.get(url, headers=headers)
-        if resp.status_code != 200:
-            raise ValueError("Invalid API key")
+        try:
+            resp = requests.get(url, headers=headers, timeout=(5, 30))
+            resp.raise_for_status()
+        except requests.exceptions.ConnectTimeout as e:
+            raise RuntimeError("Network timeout while validating API key") from e
         info = resp.json()
-        if info.get("scope") != "Office Manager":
-            raise PermissionError("Key must have Office Manager scope")
+        if info.get("user-scope") != "Office Manager":
+            scope = info.get("user-scope")
+            raise PermissionError(f"API key needs Office Manager scope: {scope}")
         self.key_info = info
 
     def fetch_calls(self) -> List[Dict[str, Any]]:
         """Fetches all calls from (now-3mo) to (now-8h) with pagination."""
+        # Compute time window
         now = datetime.now(timezone.utc)
-        datetimestart = urllib.parse.quote((now - timedelta(days=90)).isoformat())
-        datetimeend = urllib.parse.quote((now - timedelta(hours=8)).isoformat())
+        datetime_end = (now - timedelta(hours=8)).isoformat().replace("+00:00", "Z")
+        datetime_start = (now - timedelta(days=90)).isoformat().replace("+00:00", "Z")
 
-        url = f"{self.base_url}/cdrs?datetime-start={datetimestart}&datetime-end={datetimeend}"
+        # Base URL without pagination
+        base_url = f"{self.base_url}/domains/~/cdrs?datetime-start={datetime_start}&datetime-end={datetime_end}"
+
         headers = {"Authorization": f"Bearer {self.apikey}"}
-        params = {
-            "start": 0,
-            "limit": 1000,
-        }
-
         all_calls: List[Dict[str, Any]] = []
+
+        # Pagination variables
+        start = 0
+        limit = 1000
+
         while True:
-            # concactonate the start and limit onto the URL
-            r = requests.get(url, headers=headers)
+            # 4) Construct the paginated URL
+            paged_url = f"{base_url}&start={start}&limit={limit}"
+
+            r = requests.get(paged_url, headers=headers)
             r.raise_for_status()
             data = r.json()
-            all_calls.extend(data["items"])
-            if not data:
+
+            items = data
+            if not items:
+                # No more call records
                 break
-            params["start"] += params["limit"]
+
+            all_calls.extend(items)
+
+            # 5) If fewer items than 'limit' were returned, we've reached the last page
+            if len(items) < limit:
+                break
+
+            # Otherwise, advance to the next page
+            start += limit
+
         return all_calls
+
+    def save_call_metadata(self, call: Dict[str, Any]) -> None:
+        """
+        Saves the full call record dict to a JSON file in its date folder.
+        Filename: {call_id}_meta.json
+        """
+        # 1) Extract the timestamp and ID
+        timestamp = call.get("call-start-datetime")
+        if not timestamp:
+            raise KeyError("Missing 'call-start-datetime' in call record")
+        call_id = (
+            call.get("id")
+            or call.get("call-orig-call-id")
+            or call.get("call-term-call-id")
+            or call.get("call-through-call-id")
+            or call.get("call-parent-cdr-id")
+            or "<unknown>"
+        )
+
+        # 2) Find (and create) the YYYY/MM/DD folder
+        folder = self._get_date_path(timestamp)
+
+        # 3) Build the metadata filepath
+        meta_file = folder / f"{call_id}_meta.json"
+
+        # 4) Write the JSON
+        try:
+            with meta_file.open("w", encoding="utf-8") as f:
+                json.dump(call, f, indent=2)
+        except Exception as e:
+            # let the caller handle/log exceptions if needed
+            raise RuntimeError(f"Failed to save metadata for call {call_id}") from e
