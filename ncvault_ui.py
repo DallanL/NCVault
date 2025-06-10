@@ -1,11 +1,14 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from tkinter.scrolledtext import ScrolledText
 import json
 import os
 import logging
 from app.helpers import validate_and_normalize_domain
 from app.config import Config
 from pathlib import Path
+import threading
+from app.main import VoIPService
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -14,6 +17,23 @@ log = logging.getLogger(__name__)
 
 APP_ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = APP_ROOT / Config.CONFIG_FILENAME
+
+
+class TextHandler(logging.Handler):
+    def __init__(self, text_widget: ScrolledText):
+        super().__init__()
+        self.text_widget = text_widget
+
+    def emit(self, record):
+        msg = self.format(record) + "\n"
+        # append in the UI thread
+        self.text_widget.after(0, self.append, msg)
+
+    def append(self, msg: str):
+        self.text_widget.configure(state="normal")
+        self.text_widget.insert(tk.END, msg)
+        self.text_widget.configure(state="disabled")
+        self.text_widget.yview(tk.END)
 
 
 class PlaceholderEntry(tk.Entry):
@@ -92,6 +112,32 @@ class ConfigUI:
         master.title("VoIP Service Configuration")
         master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
+        # Start Sync button
+        self.start_button = tk.Button(
+            master, text="Start Sync", command=self.start_sync
+        )
+        self.start_button.grid(row=3, column=2, padx=5, pady=10)
+
+        # Stop button
+        self.stop_event = threading.Event()
+        self.stop_button = tk.Button(
+            master, text="Stop Sync", command=self.stop_sync, state=tk.DISABLED
+        )
+        self.stop_button.grid(row=3, column=3, padx=5, pady=10)
+
+        # scrollable log window
+        self.log_window = ScrolledText(master, state="disabled", height=10)
+        self.log_window.grid(
+            row=5, column=0, columnspan=4, padx=5, pady=(10, 5), sticky="nsew"
+        )
+        master.grid_rowconfigure(5, weight=1)
+        master.grid_columnconfigure(1, weight=1)
+        text_handler = TextHandler(self.log_window)
+        text_handler.setFormatter(
+            logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        )
+        log.addHandler(text_handler)
+
         # load existing JSON (or empty dict)
         try:
             self.config_data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
@@ -141,6 +187,89 @@ class ConfigUI:
 
         self.status_label = tk.Label(master, text="", fg="green")
         self.status_label.grid(row=4, column=0, columnspan=3, pady=5)
+
+    def start_sync(self) -> None:
+        valid, cfg = self.validate_data()
+        if not valid:
+            return
+
+        # Prepare cancellation event
+        self.stop_event.clear()
+
+        # Disable Start, enable Stop
+        self.start_button.config(state=tk.DISABLED)
+        self.stop_button.config(state=tk.NORMAL)
+        self.update_status("Syncing…", "blue")
+
+        # Launch background thread
+        t = threading.Thread(
+            target=self._sync_thread, args=(cfg, self.stop_event), daemon=True
+        )
+        t.start()
+
+    def stop_sync(self) -> None:
+        # Signal the thread to stop
+        self.stop_event.set()
+        self.update_status("Stopping…", "orange")
+
+    def _sync_thread(self, cfg: dict, stop_event: threading.Event) -> None:
+        try:
+            log.info("🔄 Starting sync…")
+            svc = VoIPService(cfg)
+
+            # 1) Validate key
+            log.info("Validating API key…")
+            svc.validate_key()
+            log.info("API key valid.")
+
+            # 2) Fetch all calls in the window
+            log.info("Fetching call history (last 3 months until 8 hours ago)…")
+            calls = svc.fetch_calls()
+            total = len(calls)
+            log.info(f"Fetched {total} calls to process.")
+
+            # 3) Process each call
+            for idx, call in enumerate(calls, start=1):
+                if stop_event.is_set():
+                    log.warning("⏹ Stop requested; aborting sync.")
+                    break
+
+                call_id = call.get("call-parent-cdr-id", "<unknown>")
+                log.info(f"[{idx}/{total}] Processing call ID={call_id}")
+
+                # a) save metadata
+                try:
+                    svc.save_call_metadata(call)
+                    log.debug(f"✔️ Metadata saved for {call_id}")
+                except Exception as e:
+                    log.error(
+                        f"❌ Metadata save failed for {call_id}: {e}", exc_info=True
+                    )
+
+                # b) transcription
+
+                # c) recording
+
+            # 4) Final status
+            if stop_event.is_set():
+                msg, color = "Sync canceled by user.", "orange"
+                log.warning("🛑 Sync was canceled.")
+            else:
+                msg, color = "✅ Sync complete!", "green"
+                log.info("🎉 Sync completed successfully.")
+
+            # Update the status label on the main thread
+            self.master.after(0, lambda: self.update_status(msg, color))
+
+        except Exception as e:
+            logging.exception("🚨 Sync failed unexpectedly")
+            err_msg = f"Error: {e}"
+            self.master.after(0, lambda m=err_msg: self.update_status(m, "red"))
+
+        finally:
+            # Re-enable Start, disable Stop buttons
+            self.master.after(0, lambda: self.start_button.config(state=tk.NORMAL))
+        self.master.after(0, lambda: self.stop_button.config(state=tk.DISABLED))
 
     def browse_directory(self) -> None:
         """Opens a dialog to choose a directory and updates the entry."""
