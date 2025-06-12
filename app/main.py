@@ -99,12 +99,36 @@ class VoIPService:
             or call.get("call-parent-cdr-id")
             or "<unknown>"
         )
+        directions = {
+            "0": "out",
+            "1": "in",
+            "2": "missed",
+            "3": "local",
+            "4": "unknown",
+        }
+        src_element_list = {
+            "0": "",
+            "1": "",
+            "2": "",
+            "3": "",
+            "4": "unknown"
+        }
 
+        direction = call.get("call-direction") or "4"
+
+        call_direction = directions.get(direction)
+        timestamp_list = re.split(r'T|\+', call.get("call-start-datetime"))
+        timestamp = timestamp_list[1].replace(":", "-")
+        # build source element selector
+        src_element = 
+
+        # build dst element selector
+        # build src / dst element identifier
         # 2) Find (and create) the YYYY/MM/DD folder
         folder = self._get_date_path(timestamp)
 
         # 3) Build the metadata filepath
-        meta_file = folder / f"{call_id}_meta.json"
+        meta_file = folder / f"{timestamp}_{call_direction}_{call_id}_meta.json"
 
         # 4) Write the JSON
         try:

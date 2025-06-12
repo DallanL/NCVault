@@ -275,12 +275,11 @@ class ConfigUI:
         """Opens a dialog to choose a directory and updates the entry."""
         directory = filedialog.askdirectory(mustexist=True)
         if directory:
-            self.entry_directory.set_value(directory)  # Use set_value
+            self.entry_directory.set_value(directory)
             self.update_status("", "black")
 
     def validate_data(self) -> tuple[bool, dict | None]:
         """Validates inputs and returns (isValid, config_dict or None)."""
-        # Use get_value() to correctly handle placeholder text
         server_url_input = self.entry_url.get_value().strip()
         apikey = self.entry_apikey.get_value().strip()
         data_directory = self.entry_directory.get_value().strip()
@@ -321,7 +320,7 @@ class ConfigUI:
             )
             return False, None
 
-        self.entry_url.set_value(full_url)  # Use set_value
+        self.entry_url.set_value(full_url)
 
         config = {
             "server_url": full_url,
