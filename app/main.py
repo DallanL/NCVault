@@ -117,12 +117,15 @@ class VoIPService:
         recent date for which we already have saved calls.
         """
         dates: List[date] = []
-        # look for folders matching data_root/<year>/<month>/<day>
-        for day_path in self.base_data_dir.glob("*/ */ *"):
+        # look for folders matching data_dir/<year>/<month>/<day>
+        for day_path in self.base_data_dir.glob("*/*/*"):
+            if not day_path.is_dir():
+                continue
             try:
-                y, m, d = (int(part) for part in day_path.parts[-3:])
+                y, m, d = map(int, day_path.parts[-3:])
                 dates.append(date(y, m, d))
-            except Exception:
+            except ValueError as e:
+                logging.debug(f"Skipping non-date folder {day_path}: {e}")
                 continue
         return max(dates) if dates else None
 
@@ -149,16 +152,18 @@ class VoIPService:
         """
         now = datetime.now(timezone.utc)
         end_ts = (now - timedelta(hours=8)).isoformat().replace("+00:00", "Z")
-
+        logging.info("Checking last saved record")
         last_saved = self._get_last_saved_date()
         if last_saved:
             # start at midnight UTC of the day after last_saved
             start_dt = datetime.combine(
                 last_saved, datetime.min.time(), tzinfo=timezone.utc
             )
+            logging.info(f"Found previous records, setting start date to {start_dt}")
         else:
             # default to 90 days ago
             start_dt = now - timedelta(days=90)
+            logging.info(f"Found no previous records, setting start date to {start_dt}")
 
         start_ts = start_dt.isoformat().replace("+00:00", "Z")
 
