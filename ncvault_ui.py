@@ -223,7 +223,7 @@ class ConfigUI:
             log.info("API key valid.")
 
             # 2) Fetch all calls in the window
-            log.info("Fetching call history (last 3 months until 8 hours ago)…")
+            log.info("Fetching call history (up to 8 hours ago)…")
             calls = svc.fetch_calls()
             total = len(calls)
             log.info(f"Fetched {total} calls to process.")
