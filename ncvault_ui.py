@@ -247,9 +247,35 @@ class ConfigUI:
                     )
 
                 # b) transcription
+                try:
+                    if (
+                        call.get("prefilled-transcription-api") is not None
+                        or call.get("prefilled-transcription-api") != ""
+                    ):
+                        svc.save_call_transcript(call)
+                        log.debug(f"✔️ Transcript saved for {call_id}")
+                    else:
+                        log.debug(f"✔️ No Transcript for {call_id}")
+                except Exception as e:
+                    log.error(
+                        f"❌ Transcript save failed for {call_id}: {e}", exc_info=True
+                    )
 
                 # c) recording
-
+                try:
+                    if (
+                        call.get("prefilled-transcription-api") is not None
+                        or call.get("prefilled-transcription-api") != ""
+                    ):
+                        svc.save_call_recording(call)
+                        log.debug(f"✔️ Call Recording saved for {call_id}")
+                    else:
+                        log.debug(f"✔️ No Call Recording for {call_id}")
+                except Exception as e:
+                    log.error(
+                        f"❌ Call Recording save failed for {call_id}: {e}",
+                        exc_info=True,
+                    )
             # 4) Final status
             if stop_event.is_set():
                 msg, color = "Sync canceled by user.", "orange"
