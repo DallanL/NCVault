@@ -29,7 +29,7 @@ jobs:
       - name: Install Nuitka compiler
         run: pip install nuitka
 
-       - name: Compile to single executable
+      - name: Compile to single executable
          run: python -m nuitka --onefile ncvaul_ui.py
 
       - name: Upload macOS build artifact
