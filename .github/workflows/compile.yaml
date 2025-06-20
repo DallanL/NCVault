@@ -76,38 +76,45 @@ jobs:
       - name: Download ARM64 artifact
         uses: actions/download-artifact@v4
         with:
-          name: ncvault-arm64
-          path: arm64_app
+          name: ncvault-ui-arm64
+          path: arm64_app       # now contains something like arm64_app/ncvault_ui.app
 
-      - name: Download x86_64 artifact
+      - name: Download Intel artifact
         uses: actions/download-artifact@v4
         with:
-          name: ncvault-x86_64
+          name: ncvault-ui-x86_64
           path: intel_app
 
-      - name: Create universal2 executable via lipo
+      - name: Merge into a Universal2 .app
         run: |
           set -e
-          # prepare new .app bundle
-          mkdir -p universal_app/Contents/MacOS
-          mkdir -p universal_app/Contents/Resources
 
-          # merge the two binaries
+          # Find the bundle name (e.g. ncvault_ui.app)
+          APP_NAME=$(basename arm64_app/*.app)
+
+          # Prepare the new bundle skeleton
+          mkdir -p universal_app/Contents/MacOS universal_app/Contents/Resources
+
+          # Merge the two CPU slices
           lipo -create \
-            arm64_app/*.app/Contents/MacOS/ncvault \
-            intel_app/*.app/Contents/MacOS/ncvault \
-            -output universal_app/Contents/MacOS/ncvault
+            "arm64_app/$APP_NAME/Contents/MacOS/$APP_NAME" \
+            "intel_app/$APP_NAME/Contents/MacOS/$APP_NAME" \
+            -output "universal_app/Contents/MacOS/$APP_NAME"
 
-          # copy Info.plist and Resources (including icon) from one of the builds
-          cp -R arm64_app/*.app/Contents/Resources/* universal_app/Contents/Resources/
-          cp arm64_app/*.app/Contents/Info.plist universal_app/Contents/Info.plist
+          # Copy Info.plist
+          cp "arm64_app/$APP_NAME/Contents/Info.plist" \
+             "universal_app/Contents/Info.plist"
 
-      - name: Package universal2 .app
-        run: |
-          mv universal_app universal.ncvault.app
+          # Only copy Resources if present (avoids wildcard error)
+          if [ -d "arm64_app/$APP_NAME/Contents/Resources" ]; then
+            cp -R "arm64_app/$APP_NAME/Contents/Resources/"* \
+                  "universal_app/Contents/Resources/"
+          fi
 
-      - name: Upload universal2 bundle
+          # Finalize bundle name
+          mv universal_app "${APP_NAME%.app}-universal2.app"
+      - name: Upload Universal2 bundle
         uses: actions/upload-artifact@v4
         with:
-          name: ncvault-universal2
-          path: universal.ncvault.app
+          name: ncvault-ui-universal2
+          path: "*-universal2.app"
