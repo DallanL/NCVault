@@ -79,42 +79,43 @@ jobs:
           name: ncvault-arm64
           path: arm64_app
 
-      - name: Download Intel artifact
+      - name: Download x86_64 artifact
         uses: actions/download-artifact@v4
         with:
           name: ncvault-x86_64
           path: intel_app
 
-      - name: Merge into a Universal2 .app
+      - name: Merge into Universal2 .app
         run: |
           set -e
+          # Determine bundle and exec names
+          BUNDLE_NAME=$(basename arm64_app/*.app)
+          EXEC_NAME="${BUNDLE_NAME%.app}"
 
-          # Find the bundle name (e.g. ncvault.app)
-          APP_NAME=$(basename arm64_app/*.app)
+          # Prepare skeleton
+          mkdir -p universal_app/Contents/{MacOS,Resources}
 
-          # Prepare the new bundle skeleton
-          mkdir -p universal_app/Contents/MacOS universal_app/Contents/Resources
-
-          # Merge the two CPU slices
+          # Merge the two architecture slices into one Mach-O binary
           lipo -create \
-            "arm64_app/$APP_NAME/Contents/MacOS/$APP_NAME" \
-            "intel_app/$APP_NAME/Contents/MacOS/$APP_NAME" \
-            -output "universal_app/Contents/MacOS/$APP_NAME"
+            "arm64_app/$BUNDLE_NAME/Contents/MacOS/$EXEC_NAME" \
+            "intel_app/$BUNDLE_NAME/Contents/MacOS/$EXEC_NAME" \
+            -output "universal_app/Contents/MacOS/$EXEC_NAME" :contentReference[oaicite:2]{index=2}
 
-          # Copy Info.plist
-          cp "arm64_app/$APP_NAME/Contents/Info.plist" \
-             "universal_app/Contents/Info.plist"
+          # Copy bundle metadata
+          cp "arm64_app/$BUNDLE_NAME/Contents/Info.plist" \
+             "universal_app/Contents/Info.plist" :contentReference[oaicite:3]{index=3}
 
-          # Only copy Resources if present (avoids wildcard error)
-          if [ -d "arm64_app/$APP_NAME/Contents/Resources" ]; then
-            cp -R "arm64_app/$APP_NAME/Contents/Resources/"* \
-                  "universal_app/Contents/Resources/"
+          # Copy Resources only if present
+          if [ -d "arm64_app/$BUNDLE_NAME/Contents/Resources" ]; then
+            cp -R "arm64_app/$BUNDLE_NAME/Contents/Resources/"* \
+                  "universal_app/Contents/Resources/" :contentReference[oaicite:4]{index=4}
           fi
 
-          # Finalize bundle name
-          mv universal_app "${APP_NAME%.app}-universal2.app"
+          # Rename to final universal2 bundle
+          mv universal_app "${BUNDLE_NAME%.app}-universal2.app" :contentReference[oaicite:5]{index=5}
+
       - name: Upload Universal2 bundle
         uses: actions/upload-artifact@v4
         with:
           name: ncvault-universal2
-          path: "*-universal2.app"
+          path: "*-universal2.app" :contentReference[oaicite:6]{index=6}
