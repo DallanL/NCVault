@@ -178,3 +178,4 @@ cython_debug/
 
 #application config file
 ncvault_config.json
+*.swp
