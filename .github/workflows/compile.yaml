@@ -99,20 +99,20 @@ jobs:
           lipo -create \
             "arm64_app/$BUNDLE_NAME/Contents/MacOS/$EXEC_NAME" \
             "intel_app/$BUNDLE_NAME/Contents/MacOS/$EXEC_NAME" \
-            -output "universal_app/Contents/MacOS/$EXEC_NAME" :contentReference[oaicite:2]{index=2}
+            -output "universal_app/Contents/MacOS/$EXEC_NAME"
 
           # Copy bundle metadata
           cp "arm64_app/$BUNDLE_NAME/Contents/Info.plist" \
-             "universal_app/Contents/Info.plist" :contentReference[oaicite:3]{index=3}
+             "universal_app/Contents/Info.plist"
 
           # Copy Resources only if present
           if [ -d "arm64_app/$BUNDLE_NAME/Contents/Resources" ]; then
             cp -R "arm64_app/$BUNDLE_NAME/Contents/Resources/"* \
-                  "universal_app/Contents/Resources/" :contentReference[oaicite:4]{index=4}
+                  "universal_app/Contents/Resources/"
           fi
 
           # Rename to final universal2 bundle
-          mv universal_app "${BUNDLE_NAME%.app}-universal2.app" :contentReference[oaicite:5]{index=5}
+          mv universal_app "${BUNDLE_NAME%.app}-universal2.app"
 
       - name: Upload Universal2 bundle
         uses: actions/upload-artifact@v4
