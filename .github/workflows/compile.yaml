@@ -118,4 +118,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ncvault-universal2
-          path: "*-universal2.app" :contentReference[oaicite:6]{index=6}
+          path: "*-universal2.app"
