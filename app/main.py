@@ -148,11 +148,11 @@ class VoIPService:
         Fetches all calls from either:
           • the most recent saved day forward, or
           • the past 3 months (if no saved data)
-        up to (now - 8h), using pagination.
+        up to now, using pagination.
         """
         now = datetime.now(timezone.utc)
-        end_ts = (now - timedelta(hours=8)).isoformat().replace("+00:00", "Z")
-        logging.info("Checking last saved record")
+        end_ts = now.isoformat().replace("+00:00", "Z")
+        logging.debug("Checking last saved record")
         last_saved = self._get_last_saved_date()
         if last_saved:
             # start at midnight UTC of the day after last_saved
@@ -229,7 +229,7 @@ class VoIPService:
             return
 
     def save_call_recording(self, call: Dict[str, Any]) -> None:
-        id = str(call.get("call-orig-call-id")) or None
+        id = str(call.get("call-parent-call-id")) or None
         if id is None:
             return
 
@@ -244,6 +244,17 @@ class VoIPService:
         recording_url = f"{self.base_url}/domains/~/recordings/{encoded_id}"
         headers = {"Authorization": f"Bearer {self.apikey}"}
         response = requests.get(recording_url, headers=headers)
+        if response.status_code == 404:
+            backup_id = str(call.get("call-term-call-id")) or None
+            logging.info(
+                f"Failed to get recording with callid: {id}\nTrying Backup callid: {backup_id}"
+            )
+
+            if backup_id is None:
+                return
+            encoded_backup_id = quote(backup_id, safe="")
+            recording_url = f"{self.base_url}/domains/~/recordings/{encoded_backup_id}"
+            response = requests.get(recording_url, headers=headers)
         response_json = json.loads(response.text)
         if response.status_code == 200 and response_json.get(
             "call-recording-status"
@@ -255,6 +266,7 @@ class VoIPService:
                     with open(recording_file, "wb") as f:
                         for chunk in r.iter_content(chunk_size=8192):
                             f.write(chunk)
+                logging.info(f"Saved recording: {filename}")
             except Exception as e:
                 raise RuntimeError(
                     f"Failed to save call recording for call {id}"
