@@ -28,12 +28,14 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install -r requirements.txt
+          python3 -m pip install nuitka
 
       - name: Install Intel (Rosetta) deps
         if: matrix.arch == 'x86_64'
         run: |
           arch -x86_64 python3 -m pip install --upgrade pip
           arch -x86_64 python3 -m pip install -r requirements.txt
+          arch -x86_64 python3 -m pip install nuitka
 
       - name: Compile for ${{ matrix.arch }}
         run: |
