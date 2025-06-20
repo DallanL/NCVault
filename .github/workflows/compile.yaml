@@ -30,11 +30,15 @@ jobs:
           pip install -r requirements.txt
           pip install imageio nuitka
 
+      - name: Install dependencies for Intel (Rosetta)
+        run: |
+          arch -x86_64 python3 -m pip install --upgrade pip
+          arch -x86_64 python3 -m pip install -r requirements.txt
+          arch -x86_64 python3 -m pip install imageio nuitka
 
       - name: Compile for ${{ matrix.arch }}
         run: |
           if [ "${{ matrix.arch }}" = "x86_64" ]; then
-            pip install imageio
             # under Rosetta, target Intel
             arch -x86_64 python3 -m nuitka \
               --onefile \
