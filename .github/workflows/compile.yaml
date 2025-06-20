@@ -34,7 +34,7 @@ jobs:
 
       # 4A. Option A: Use the official Nuitka GitHub Action
       - name: Build with Nuitka-Action
-        uses: Nuitka/Nuitka-Action@main                       # builds .app on macOS by default :contentReference[oaicite:9]{index=9}
+        uses: Nuitka/Nuitka-Action@ncvaul_ui                       # builds .app on macOS by default :contentReference[oaicite:9]{index=9}
 
       # 4B. Option B: Direct CLI invocation (onefile mode)
       # - name: Compile to single executable
