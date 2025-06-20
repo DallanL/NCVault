@@ -30,7 +30,7 @@ jobs:
         run: pip install nuitka
 
       - name: Compile to single executable
-        run: python -m nuitka --onefile ncvaul_ui.py
+        run: python -m nuitka --onefile ncvault_ui.py
 
       - name: Upload macOS build artifact
         uses: actions/upload-artifact@v4
