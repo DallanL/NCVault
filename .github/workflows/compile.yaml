@@ -28,7 +28,7 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install -r requirements.txt
-          python3 -m pip install nuitka
+          python3 -m pip install nuitka zstandard ccache
 
 
       - name: Install Intel (Rosetta) deps
@@ -36,7 +36,7 @@ jobs:
         run: |
           arch -x86_64 python3 -m pip install --upgrade pip
           arch -x86_64 python3 -m pip install -r requirements.txt
-          arch -x86_64 python3 -m pip install nuitka
+          arch -x86_64 python3 -m pip install nuitka zstandard ccache
 
 
       - name: Compile for ${{ matrix.arch }}
@@ -76,20 +76,20 @@ jobs:
       - name: Download ARM64 artifact
         uses: actions/download-artifact@v4
         with:
-          name: ncvault-ui-arm64
-          path: arm64_app       # now contains something like arm64_app/ncvault_ui.app
+          name: ncvault-arm64
+          path: arm64_app
 
       - name: Download Intel artifact
         uses: actions/download-artifact@v4
         with:
-          name: ncvault-ui-x86_64
+          name: ncvault-x86_64
           path: intel_app
 
       - name: Merge into a Universal2 .app
         run: |
           set -e
 
-          # Find the bundle name (e.g. ncvault_ui.app)
+          # Find the bundle name (e.g. ncvault.app)
           APP_NAME=$(basename arm64_app/*.app)
 
           # Prepare the new bundle skeleton
@@ -116,5 +116,5 @@ jobs:
       - name: Upload Universal2 bundle
         uses: actions/upload-artifact@v4
         with:
-          name: ncvault-ui-universal2
+          name: ncvault-universal2
           path: "*-universal2.app"
