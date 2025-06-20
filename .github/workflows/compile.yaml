@@ -24,42 +24,40 @@ jobs:
           cache-dependency-path: |
             **/requirements*.txt
 
-      - name: Install requirements
+      - name: Install ARM64 deps
         run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install imageio nuitka
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements.txt imageio
 
-      - name: Install dependencies for Intel (Rosetta)
+      - name: Install Intel (Rosetta) deps
+        if: matrix.arch == 'x86_64'
         run: |
           arch -x86_64 python3 -m pip install --upgrade pip
-          arch -x86_64 python3 -m pip install -r requirements.txt
-          arch -x86_64 python3 -m pip install imageio nuitka
+          arch -x86_64 python3 -m pip install -r requirements.txt imageio
 
       - name: Compile for ${{ matrix.arch }}
         run: |
           if [ "${{ matrix.arch }}" = "x86_64" ]; then
-            # under Rosetta, target Intel
             arch -x86_64 python3 -m nuitka \
               --onefile \
               --macos-create-app-bundle \
-              --macos-target-arch=x86_64 \
-              --output-dir=dist/${{ matrix.arch }} \
               --macos-app-icon=app_icon.png \
               --enable-plugin=tk-inter \
+              --include-package=imageio \
+              --macos-target-arch=x86_64 \
+              --output-dir=dist/x86_64 \
               ncvault.py
           else
-            # native ARM64
             python3 -m nuitka \
               --onefile \
               --macos-create-app-bundle \
-              --macos-target-arch=arm64 \
-              --output-dir=dist/${{ matrix.arch }} \
               --macos-app-icon=app_icon.png \
               --enable-plugin=tk-inter \
+              --include-package=imageio \
+              --macos-target-arch=arm64 \
+              --output-dir=dist/arm64 \
               ncvault.py
           fi
-
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
