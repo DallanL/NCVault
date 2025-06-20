@@ -8,6 +8,9 @@ on:
 jobs:
   build:
     runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [ x86_64, arm64 ]
 
     steps:
       - name: Checkout repository
@@ -25,17 +28,79 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install imageio
+          pip install imageio nuitka
 
-      - name: Install Nuitka compiler
-        run: pip install nuitka
 
-      - name: Compile to single executable
-        run: python -m nuitka --onefile --macos-create-app-bundle --output-dir=dist --macos-app-icon=app_icon.png --enable-plugin=tk-inter ncvault_ui.py
+      - name: Compile for ${{ matrix.arch }}
+        run: |
+          if [ "${{ matrix.arch }}" = "x86_64" ]; then
+            # under Rosetta, target Intel
+            arch -x86_64 python3 -m nuitka \
+              --onefile \
+              --macos-create-app-bundle \
+              --macos-target-arch=x86_64 \
+              --output-dir=dist/${{ matrix.arch }} \
+              --macos-app-icon=app_icon.png \
+              --enable-plugin=tk-inter \
+              ncvault.py
+          else
+            # native ARM64
+            python3 -m nuitka \
+              --onefile \
+              --macos-create-app-bundle \
+              --macos-target-arch=arm64 \
+              --output-dir=dist/${{ matrix.arch }} \
+              --macos-app-icon=app_icon.png \
+              --enable-plugin=tk-inter \
+              ncvault.py
+          fi
 
-      - name: Upload macOS build artifact
+
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos-executable
-          path: |
-            dist/*.app
+          name: ncvault-${{ matrix.arch }}
+          path: dist/${{ matrix.arch }}/*.app
+
+  universal:
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - name: Download ARM64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ncvault-arm64
+          path: arm64_app
+
+      - name: Download x86_64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ncvault-x86_64
+          path: intel_app
+
+      - name: Create universal2 executable via lipo
+        run: |
+          set -e
+          # prepare new .app bundle
+          mkdir -p universal_app/Contents/MacOS
+          mkdir -p universal_app/Contents/Resources
+
+          # merge the two binaries
+          lipo -create \
+            arm64_app/*.app/Contents/MacOS/ncvault \
+            intel_app/*.app/Contents/MacOS/ncvault \
+            -output universal_app/Contents/MacOS/ncvault
+
+          # copy Info.plist and Resources (including icon) from one of the builds
+          cp -R arm64_app/*.app/Contents/Resources/* universal_app/Contents/Resources/
+          cp arm64_app/*.app/Contents/Info.plist universal_app/Contents/Info.plist
+
+      - name: Package universal2 .app
+        run: |
+          mv universal_app universal.ncvault.app
+
+      - name: Upload universal2 bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ncvault-universal2
+          path: universal.ncvault.app
