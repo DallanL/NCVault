@@ -30,12 +30,14 @@ jobs:
           python3 -m pip install -r requirements.txt
           python3 -m pip install nuitka
 
+
       - name: Install Intel (Rosetta) deps
         if: matrix.arch == 'x86_64'
         run: |
           arch -x86_64 python3 -m pip install --upgrade pip
           arch -x86_64 python3 -m pip install -r requirements.txt
           arch -x86_64 python3 -m pip install nuitka
+
 
       - name: Compile for ${{ matrix.arch }}
         run: |
@@ -45,6 +47,7 @@ jobs:
               --macos-create-app-bundle \
               --macos-app-icon=app_icon.icns \
               --enable-plugin=tk-inter \
+              --enable-plugin=upx \
               --macos-target-arch=x86_64 \
               --output-dir=dist/x86_64 \
               ncvault.py
@@ -54,6 +57,7 @@ jobs:
               --macos-create-app-bundle \
               --macos-app-icon=app_icon.icns \
               --enable-plugin=tk-inter \
+              --enable-plugin=upx \
               --macos-target-arch=arm64 \
               --output-dir=dist/arm64 \
               ncvault.py
