@@ -85,34 +85,50 @@ jobs:
           name: ncvault-x86_64
           path: intel_app
 
+      # Debug: show exactly what files we have
+      - name: Debug: list ARM64 contents
+        run: ls -R arm64_app
+      - name: Debug: list Intel contents
+        run: ls -R intel_app
+
       - name: Merge into Universal2 .app
         run: |
           set -e
-          # Determine bundle and exec names
+
+          # Capture the .app bundle name (e.g. "ncvault.app")
           BUNDLE_NAME=$(basename arm64_app/*.app)
           EXEC_NAME="${BUNDLE_NAME%.app}"
 
-          # Prepare skeleton
+          echo "Found bundle: $BUNDLE_NAME, exec: $EXEC_NAME"
+
+          # Recreate the minimal bundle structure
           mkdir -p universal_app/Contents/{MacOS,Resources}
 
-          # Merge the two architecture slices into one Mach-O binary
+          # Merge the two binaries
           lipo -create \
             "arm64_app/$BUNDLE_NAME/Contents/MacOS/$EXEC_NAME" \
             "intel_app/$BUNDLE_NAME/Contents/MacOS/$EXEC_NAME" \
             -output "universal_app/Contents/MacOS/$EXEC_NAME"
 
-          # Copy bundle metadata
-          cp "arm64_app/$BUNDLE_NAME/Contents/Info.plist" \
-             "universal_app/Contents/Info.plist"
+          # Copy Info.plist if it exists
+          if [ -f "arm64_app/$BUNDLE_NAME/Contents/Info.plist" ]; then
+            cp "arm64_app/$BUNDLE_NAME/Contents/Info.plist" \
+               "universal_app/Contents/Info.plist"
+          else
+            echo "Warning: Info.plist not found, skipping."
+          fi
 
-          # Copy Resources only if present
+          # Copy Resources only if the folder exists
           if [ -d "arm64_app/$BUNDLE_NAME/Contents/Resources" ]; then
             cp -R "arm64_app/$BUNDLE_NAME/Contents/Resources/"* \
                   "universal_app/Contents/Resources/"
+          else
+            echo "No Resources/ folder found, skipping."
           fi
 
-          # Rename to final universal2 bundle
+          # Rename to the final universal2 bundle
           mv universal_app "${BUNDLE_NAME%.app}-universal2.app"
+          echo "Created universal bundle: ${BUNDLE_NAME%.app}-universal2.app"
 
       - name: Upload Universal2 bundle
         uses: actions/upload-artifact@v4
