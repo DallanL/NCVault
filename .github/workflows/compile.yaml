@@ -1,4 +1,4 @@
-name: Build macOS Executable
+name: Build Windows Executable
 
 on:
   push:
@@ -6,132 +6,33 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        arch: [ x86_64, arm64 ]
+  build-windows:
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4 
+        uses: actions/checkout@v4
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5   
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: |
-            **/requirements*.txt
 
-      - name: Install ARM64 deps
+      - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install -r requirements.txt
-          python3 -m pip install nuitka zstandard
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
 
-
-      - name: Install Intel (Rosetta) deps
-        if: matrix.arch == 'x86_64'
+      - name: Build executable with PyInstaller
         run: |
-          arch -x86_64 python3 -m pip install --upgrade pip
-          arch -x86_64 python3 -m pip install -r requirements.txt
-          arch -x86_64 python3 -m pip install nuitka zstandard
+          pyinstaller --onefile \
+                      --name ncvault \
+                      --icon app_icon.png \
+                      ncvault.py
 
-
-      - name: Compile for ${{ matrix.arch }}
-        run: |
-          if [ "${{ matrix.arch }}" = "x86_64" ]; then
-            arch -x86_64 python3 -m nuitka \
-              --onefile \
-              --macos-create-app-bundle \
-              --macos-app-icon=app_icon.icns \
-              --enable-plugin=tk-inter \
-              --enable-plugin=upx \
-              --macos-target-arch=x86_64 \
-              --output-dir=dist/x86_64 \
-              ncvault.py
-          else
-            python3 -m nuitka \
-              --onefile \
-              --macos-create-app-bundle \
-              --macos-app-icon=app_icon.icns \
-              --enable-plugin=tk-inter \
-              --enable-plugin=upx \
-              --macos-target-arch=arm64 \
-              --output-dir=dist/arm64 \
-              ncvault.py
-          fi
-
-      - name: Upload build artifact
+      - name: Upload Windows executable
         uses: actions/upload-artifact@v4
         with:
-          name: ncvault-${{ matrix.arch }}
-          path: dist/${{ matrix.arch }}/*.app
+          name: windows-executable
+          path: dist/*.exe
 
-  universal:
-    needs: build
-    runs-on: macos-latest
-    steps:
-      - name: Download ARM64 artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ncvault-arm64
-          path: arm64_app
-
-      - name: Download x86_64 artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ncvault-x86_64
-          path: intel_app
-
-      # Debug: show exactly what files we have
-      - name: Debug: list ARM64 contents
-        run: ls -R arm64_app
-      - name: Debug: list Intel contents
-        run: ls -R intel_app
-
-      - name: Merge into Universal2 .app
-        run: |
-          set -e
-
-          # Capture the .app bundle name (e.g. "ncvault.app")
-          BUNDLE_NAME=$(basename arm64_app/*.app)
-          EXEC_NAME="${BUNDLE_NAME%.app}"
-
-          echo "Found bundle: $BUNDLE_NAME, exec: $EXEC_NAME"
-
-          # Recreate the minimal bundle structure
-          mkdir -p universal_app/Contents/{MacOS,Resources}
-
-          # Merge the two binaries
-          lipo -create \
-            "arm64_app/$BUNDLE_NAME/Contents/MacOS/$EXEC_NAME" \
-            "intel_app/$BUNDLE_NAME/Contents/MacOS/$EXEC_NAME" \
-            -output "universal_app/Contents/MacOS/$EXEC_NAME"
-
-          # Copy Info.plist if it exists
-          if [ -f "arm64_app/$BUNDLE_NAME/Contents/Info.plist" ]; then
-            cp "arm64_app/$BUNDLE_NAME/Contents/Info.plist" \
-               "universal_app/Contents/Info.plist"
-          else
-            echo "Warning: Info.plist not found, skipping."
-          fi
-
-          # Copy Resources only if the folder exists
-          if [ -d "arm64_app/$BUNDLE_NAME/Contents/Resources" ]; then
-            cp -R "arm64_app/$BUNDLE_NAME/Contents/Resources/"* \
-                  "universal_app/Contents/Resources/"
-          else
-            echo "No Resources/ folder found, skipping."
-          fi
-
-          # Rename to the final universal2 bundle
-          mv universal_app "${BUNDLE_NAME%.app}-universal2.app"
-          echo "Created universal bundle: ${BUNDLE_NAME%.app}-universal2.app"
-
-      - name: Upload Universal2 bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: ncvault-universal2
-          path: "*-universal2.app"
