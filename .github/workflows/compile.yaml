@@ -25,7 +25,7 @@ jobs:
 
       - name: Build executable with PyInstaller
         run: |
-          pyinstaller --onefile --name ncvault --icon app_icon.png ncvault.py
+          pyinstaller --onefile --noconsole --name ncvault --icon app_icon.png ncvault.py
 
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
