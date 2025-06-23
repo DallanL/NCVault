@@ -47,7 +47,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: dist/*.exe
+          asset_path: dist/ncvault.exe
           asset_name: ncvault-${{ github.ref_name }}.exe
           asset_content_type: application/octet-stream
 
