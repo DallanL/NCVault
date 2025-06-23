@@ -1,8 +1,8 @@
-name: Build Windows Executable
+name: Build & Release Windows Executable
 
 on:
   push:
-    branches: [ main ]
+    tags: [ 'v*' ]
   workflow_dispatch:
 
 jobs:
@@ -21,15 +21,30 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt pyinstaller pillow
+          python -m pip install pyinstaller pillow
 
-      - name: Build executable with PyInstaller
+      - name: Build executable
         run: |
           pyinstaller --onefile --noconsole --name ncvault --icon app_icon.png ncvault.py
 
-      - name: Upload Windows executable
-        uses: actions/upload-artifact@v4
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: windows-executable
-          path: dist/*.exe
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: dist/*.exe
+          asset_name: ncvault-${{ github.ref_name }}.exe
+          asset_content_type: application/octet-stream
 
