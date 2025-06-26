@@ -188,6 +188,14 @@ class ConfigUI:
         self.status_label = tk.Label(master, text="", fg="green")
         self.status_label.grid(row=4, column=0, columnspan=3, pady=5)
 
+        for entry in (self.entry_url, self.entry_apikey, self.entry_directory):
+            entry.bind(
+                "<KeyRelease>",
+                lambda _: self.save_button.config(
+                    state=tk.NORMAL, text="Save Configuration"
+                ),
+            )
+
     def start_sync(self) -> None:
         valid, cfg = self.validate_data()
         if not valid:
