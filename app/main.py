@@ -84,8 +84,9 @@ class VoIPService:
             src = None
 
         rawdst = call.get(dst_map[direction_key]) if dst_map[direction_key] else None
-        if rawdst:
-            dst = re.sub(r"[^a-zA-Z0-9]", "", rawdst)
+        strrawdst = str(rawdst)
+        if strrawdst:
+            dst = re.sub(r"[^a-zA-Z0-9]", "", strrawdst)
         else:
             dst = None
 
