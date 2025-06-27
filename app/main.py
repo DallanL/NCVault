@@ -83,7 +83,11 @@ class VoIPService:
         else:
             src = None
 
-        dst = call.get(dst_map[direction_key]) if dst_map[direction_key] else None
+        rawdst = call.get(dst_map[direction_key]) if dst_map[direction_key] else None
+        if rawdst:
+            dst = re.sub(r"[^a-zA-Z0-9]", "", rawdst)
+        else:
+            dst = None
 
         # --- build the filename body ---
         if call_dir == "unknown":
