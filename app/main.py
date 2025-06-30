@@ -6,17 +6,23 @@ from datetime import datetime, timedelta, timezone, date
 from typing import Any, Dict, List, Optional
 import re
 import logging
+from dataclasses import dataclass
 
+@dataclass
+class VoIPServiceConfig:
+    server_url: str
+    apikey: str
+    data_directory: str
 
 class VoIPService:
-    def __init__(self, config: Dict[str, Any]) -> None:
+    def __init__(self, config: VoIPServiceConfig) -> None:
         self.config = config
         # e.g. "voip.example.com"
-        self.server = self.config.get("server_url", "").lstrip("https://")
-        self.apikey = self.config.get("apikey", "")
+        self.server = self.config.server_url.lstrip("https://")
+        self.apikey = self.config.apikey
         self.base_url = f"https://{self.server}/ns-api/v2"
         self.key_info: Dict[str, Any] = {}
-        self.base_data_dir = Path(self.config.get("data_directory", ""))
+        self.base_data_dir = Path(self.config.data_directory)
 
     def _generate_call_filename(
         self, call: Dict[str, Any], label: str, extension: str = "json"
@@ -148,29 +154,35 @@ class VoIPService:
             raise PermissionError(f"API key needs Office Manager scope: {scope}")
         self.key_info = info
 
-    def fetch_calls(self) -> List[Dict[str, Any]]:
+    def fetch_calls(
+        self,
+        start_dt: Optional[datetime] = None,
+        end_dt: Optional[datetime] = None,
+    ) -> List[Dict[str, Any]]:
         """
-        Fetches all calls from either:
-          • the most recent saved day forward, or
-          • the past 3 months (if no saved data)
-        up to now, using pagination.
+        Fetches calls within a specified datetime range, using pagination.
+        If start_dt and end_dt are not provided, it fetches from the most
+        recent saved day forward, or the past 3 months (if no saved data)
+        up to now.
         """
-        now = datetime.now(timezone.utc)
-        end_ts = now.isoformat().replace("+00:00", "Z")
-        logging.debug("Checking last saved record")
-        last_saved = self._get_last_saved_date()
-        if last_saved:
-            # start at midnight UTC of the day after last_saved
-            start_dt = datetime.combine(
-                last_saved, datetime.min.time(), tzinfo=timezone.utc
-            )
-            logging.info(f"Found previous records, setting start date to {start_dt}")
-        else:
-            # default to 90 days ago
-            start_dt = now - timedelta(days=90)
-            logging.info(f"Found no previous records, setting start date to {start_dt}")
+        if start_dt is None or end_dt is None:
+            now = datetime.now(timezone.utc)
+            end_dt = now
+            logging.debug("Checking last saved record")
+            last_saved = self._get_last_saved_date()
+            if last_saved:
+                # start at midnight UTC of the day after last_saved
+                start_dt = datetime.combine(
+                    last_saved, datetime.min.time(), tzinfo=timezone.utc
+                )
+                logging.info(f"Found previous records, setting start date to {start_dt}")
+            else:
+                # default to 90 days ago
+                start_dt = now - timedelta(days=90)
+                logging.info(f"Found no previous records, setting start date to {start_dt}")
 
         start_ts = start_dt.isoformat().replace("+00:00", "Z")
+        end_ts = end_dt.isoformat().replace("+00:00", "Z")
 
         base_url = (
             f"{self.base_url}/domains/~/cdrs"
