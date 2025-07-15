@@ -200,7 +200,7 @@ class VoIPService:
         all_calls: List[Dict[str, Any]] = []
 
         start = 0
-        limit = 100
+        limit = 1000
 
         while True:
             paged_url = f"{base_url}&start={start}&limit={limit}"
@@ -252,54 +252,68 @@ class VoIPService:
             return
 
     def save_call_recording(self, call: Dict[str, Any]) -> None:
-        id = str(call.get("call-parent-call-id")) or None
-        if id is None:
-            return
-
-        logging.info(f"saving recording for {id}")
-        dt_str = call.get("call-start-datetime") or "unknown"
+        """
+        Attempt to save a call recording by iterating over possible call-ID fields.
+        """
+        headers = {"Authorization": f"Bearer {self.apikey}"}
+        dt_str = call.get("call-start-datetime", "unknown")
         folder: Path = self._get_date_path(dt_str)
         filename = self._generate_call_filename(
             call, label="recording", extension="wav"
         )
         recording_file = folder / filename
-        encoded_id = quote(id, safe="")
-        recording_url = f"{self.base_url}/domains/~/recordings/{encoded_id}"
-        headers = {"Authorization": f"Bearer {self.apikey}"}
-        response = requests.get(recording_url, headers=headers)
-        if response.status_code == 404:
-            backup_id = str(call.get("call-term-call-id")) or None
+
+        # List of fields to try, in priority order
+        id_fields = [
+            "call-parent-call-id",
+            "call-term-call-id",
+            "call-orig-call-id",
+        ]
+
+        for field in id_fields:
+            call_id: Optional[str] = call.get(field)
+            if not call_id:
+                continue
+
+            logging.info(f"Trying recording for {field} = {call_id}")
+            encoded_id = quote(str(call_id), safe="")
+            url = f"{self.base_url}/domains/~/recordings/{encoded_id}"
+            resp = requests.get(url, headers=headers)
+
+            # If not found, try next ID
+            if resp.status_code == 404:
+                logging.info(f"No recording at {field} ({call_id}); trying next ID")
+                continue
+
+            # Parse JSON and validate recording status
+            data = resp.json()
+            status = data.get("call-recording-status")
+            if resp.status_code == 200 and status in ("converted", "archived"):
+                download_url = data.get("file-access-url")
+                if not download_url:
+                    logging.info(f"No download URL in response for {call_id}")
+                    continue
+
+                # Stream download to file
+                try:
+                    with requests.get(download_url, headers=headers, stream=True) as dl:
+                        dl.raise_for_status()
+                        with open(recording_file, "wb") as f:
+                            for chunk in dl.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                    logging.info(f"Saved recording: {filename}")
+                    return
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to save recording for call {call_id}"
+                    ) from e
+
             logging.info(
-                f"Failed to get recording with callid: {id}\nTrying Backup callid: {backup_id}"
+                f"Recording not ready for {call_id}: status={resp.status_code}, "
+                f"recording-status={status}"
             )
 
-            if backup_id is None:
-                return
-            encoded_backup_id = quote(backup_id, safe="")
-            recording_url = f"{self.base_url}/domains/~/recordings/{encoded_backup_id}"
-            response = requests.get(recording_url, headers=headers)
-        response_json = json.loads(response.text)
-        if response.status_code == 200 and response_json.get(
-            "call-recording-status"
-        ) == ("converted" or "archived"):
-            download_url = response_json.get("file-access-url")
-            try:
-                with requests.get(download_url, headers=headers, stream=True) as r:
-                    r.raise_for_status()
-                    with open(recording_file, "wb") as f:
-                        for chunk in r.iter_content(chunk_size=8192):
-                            f.write(chunk)
-                logging.info(f"Saved recording: {filename}")
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to save call recording for call {id}"
-                ) from e
-        else:
-            logging.info(
-                f"Failed to get download link for callid: {id}\nResponse code: {response.status_code}\nRecording Status: {response_json.get('call-recording-status')}"
-            )
-
-        return
+        logging.info("No valid recording found for any call-ID field")
 
     def save_call_metadata(self, call: Dict[str, Any]) -> None:
         """
