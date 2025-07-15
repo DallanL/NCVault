@@ -8,11 +8,13 @@ import re
 import logging
 from dataclasses import dataclass
 
+
 @dataclass
 class VoIPServiceConfig:
     server_url: str
     apikey: str
     data_directory: str
+
 
 class VoIPService:
     def __init__(self, config: VoIPServiceConfig) -> None:
@@ -175,11 +177,15 @@ class VoIPService:
                 start_dt = datetime.combine(
                     last_saved, datetime.min.time(), tzinfo=timezone.utc
                 )
-                logging.info(f"Found previous records, setting start date to {start_dt}")
+                logging.info(
+                    f"Found previous records, setting start date to {start_dt}"
+                )
             else:
                 # default to 90 days ago
                 start_dt = now - timedelta(days=90)
-                logging.info(f"Found no previous records, setting start date to {start_dt}")
+                logging.info(
+                    f"Found no previous records, setting start date to {start_dt}"
+                )
 
         start_ts = start_dt.isoformat().replace("+00:00", "Z")
         end_ts = end_dt.isoformat().replace("+00:00", "Z")
@@ -194,7 +200,7 @@ class VoIPService:
         all_calls: List[Dict[str, Any]] = []
 
         start = 0
-        limit = 1000
+        limit = 100
 
         while True:
             paged_url = f"{base_url}&start={start}&limit={limit}"
