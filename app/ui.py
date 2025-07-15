@@ -104,7 +104,7 @@ class PlaceholderEntry(tk.Entry):
 class ConfigUI:
     def __init__(self, master: tk.Tk) -> None:
         self.master = master
-        master.title("VoIP Service Configuration")
+        master.title("NCVault")
         master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # Start Sync button
