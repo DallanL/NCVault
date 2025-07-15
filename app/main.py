@@ -263,12 +263,19 @@ class VoIPService:
         )
         recording_file = folder / filename
 
-        # List of fields to try, in priority order
-        id_fields = [
-            "call-parent-call-id",
-            "call-term-call-id",
-            "call-orig-call-id",
-        ]
+        # List of fields to try, in priority order based on call direction
+        if call.get("call-direction") == "0":
+            id_fields = [
+                "call-orig-call-id",
+                "call-parent-call-id",
+                "call-term-call-id",
+            ]
+        else:
+            id_fields = [
+                "call-parent-call-id",
+                "call-term-call-id",
+                "call-orig-call-id",
+            ]
 
         for field in id_fields:
             call_id: Optional[str] = call.get(field)
