@@ -36,3 +36,18 @@ pip install -r requirements.txt
 ```bash
 python3 -m ncvault --help
 ```
+
+## RoadMap
+[ ] - Replace plaintext API key storage with keyring; migrate existing configs and delete the key from disk. 
+
+[ ] - Introduce a local SQLite catalog (with FTS5) and asset checksums; backfill existing files. 
+
+[ ] - Add tenacity-based retries + .part atomic writes + SHA-256 verification. 
+
+[ ] - Harden logging (PII scrub + rotation) per OWASP guidance. 
+
+[ ] - Sanitize filenames for Windows reserved chars and cap path length; document long-path behavior. 
+
+[ ] - Package with PyInstaller and sign the binary; publish a signed test build and validate on a clean Windows 11 box. 
+
+[ ] - Add retention settings + “Secure Purge” and write down your CPNI/CPRA posture in the README/help
