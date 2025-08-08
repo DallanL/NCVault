@@ -50,4 +50,10 @@ python3 -m ncvault --help
 
 [ ] - Package with PyInstaller and sign the binary; publish a signed test build and validate on a clean Windows 11 box. 
 
-[ ] - Add retention settings + “Secure Purge” and write down your CPNI/CPRA posture in the README/help
+[ ] - Add retention settings + “Secure Purge” and document CPNI/CPRA posture in the README
+
+[ ] - Add UI elements to browse/search the saved call history files
+
+[ ] - Add downloading of voicemails: metadata, audio file, transcription
+
+[ ] - Add downloading of sms/mms messages
