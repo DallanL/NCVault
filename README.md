@@ -38,7 +38,7 @@ python3 -m ncvault --help
 ```
 
 ## RoadMap
-[ ] - Replace plaintext API key storage with keyring; migrate existing configs and delete the key from disk. 
+[x] - Replace plaintext API key storage with keyring; migrate existing configs and delete the key from disk. 
 
 [ ] - Introduce a local SQLite catalog (with FTS5) and asset checksums; backfill existing files. 
 

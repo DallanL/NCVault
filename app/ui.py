@@ -5,7 +5,7 @@ from tkinter import ttk
 import os
 import logging
 from app.helpers import validate_and_normalize_domain
-from app.config_manager import load_config, save_config
+from app.config_manager import load_config, save_config, set_apikey
 import threading
 import time
 from app.main import VoIPService, VoIPServiceConfig
@@ -534,25 +534,43 @@ class ConfigUI:
         return True, config
 
     def save_configuration(self) -> None:
-        """Validates inputs and saves them to ncvault_config.json at APP_ROOT."""
         self.update_status("", "black")
-        isValid, config = self.validate_data()
-
-        if not isValid or config is None:
+        is_valid, config = self.validate_data()
+        if not is_valid or config is None:
             return
 
+        # Extract secret before disk write
+        apikey = (self.entry_apikey.get_value() or "").strip()
+        server_url = (self.entry_url.get_value() or "").strip()
+
+        # 1) Write secret to keyring first (so user sees a clear error if keyring is misconfigured)
+        if apikey:
+            if not set_apikey(server_url, apikey):
+                messagebox.showerror(
+                    "Keyring Error",
+                    "Failed to save API key to the system keychain. "
+                    "Please ensure a keyring is available (Windows Credential Manager, macOS Keychain, or Secret Service/KWallet).",
+                    parent=self.master,
+                )
+                self.update_status("Error saving API key.", "red")
+                return
+
+        # 2) Remove apikey from config dict before saving to disk
+        config.pop("apikey", None)
+
+        # 3) Save the rest of the config to JSON
         if save_config(config):
-            logging.info(f"Configuration saved successfully.")
+            logging.info("Configuration saved without secrets.")
             self.config_data = config
-            self.update_status(f"Configuration saved!", "green")
             self.save_button.config(text="Config Saved", state=tk.DISABLED)
+            self.update_status("Configuration saved.", "green")
         else:
             messagebox.showerror(
                 "File Error",
-                f"Failed to save configuration file.\n\nPlease check permissions for directory",
+                "Failed to save configuration file.\n\nCheck directory permissions.",
                 parent=self.master,
             )
-            self.update_status(f"Error saving configuration.", "red")
+            self.update_status("Error saving configuration.", "red")
 
     def update_status(self, message: str, color: str) -> None:
         """Updates the status label."""
